@@ -1,0 +1,62 @@
+#Commands run based on guide at http://drive5.com/usearch/manual/uparse_cmds.html
+
+wget http://drive5.com/usearch/manual/uparse_cmds.html
+
+#The first few steps to do with getting the sequences in the right fastq format were performed in the raw data directory $d
+
+# Set a variable to give a short name for the USEARCH binary
+u=~/bin/usearch7.0.1090_i86linux32
+
+# Variable for directory containing input data (reads and ref. db)
+d=~/qanalysis/raw_data/fastq
+
+# Gather stats to help decide on quality options
+$u -fastq_stats $d/ElliottB.fq -log stats.log
+
+# Quality filter, length truncate, covert to FASTA
+$u -fastq_filter $d/ElliottB_stripped.fq -fastq_maxee 0.5 -fastq_trunclen 250 -fastaout reads.fa
+#usearch v7.0.1090_i86linux32, 4.0Gb RAM (24.7Gb total), 16 cores
+#(C) Copyright 2013 Robert C. Edgar, all rights reserved.
+#http://drive5.com/usearch
+
+# Dereplication
+$u -derep_fulllength reads.fa -output derep.fa -sizeout
+
+# Abundance sort and discard singletons
+$u -sortbysize derep.fa -output sorted.fa -minsize 2
+
+# OTU clustering
+$u -cluster_otus sorted.fa -otus otus1.fa
+
+# Chimera filtering using reference database
+wget http://drive5.com/uchime/gold.fa
+mv gold.fa /home/elliottd/qanalysis/taxonomy/gold.fa
+GOLD=/home/elliottd/qanalysis/taxonomy/gold.fa
+$u -uchime_ref otus1.fa -db $GOLD -strand plus -nonchimeras otus2.fa
+#00:00 2.1Mb Reading otus1.fa, 138.2kb
+#00:00 2.2Mb 482 seqs, min 250, avg 250, max 250nt
+#00:00 2.2Mb Reading /home/elliottd/qanalysis/taxonomy/gold.fa, 16Mb
+#00:00  18Mb 10362 (10.4k) seqs, min 1205, avg 1470, max 1655nt
+#00:01  18Mb  100.0% Masking
+#00:02  19Mb  100.0% Word stats
+#00:02  77Mb  100.0% Building slots
+#00:03  77Mb  100.0% Build index
+#00:03 262Mb  100.0% Search 17/482 chimeras found (3.5%)
+#00:03 262Mb  100.0% Writing 465 non-chimeras
+
+# Label OTU sequences OTU_1, OTU_2...
+python ~/drive5_py/fasta_number.py otus2.fa OTU_ > otus.fa
+
+# Map reads (including singletons) back to OTUs
+$u -usearch_global reads.fa -db otus.fa -strand plus -id 0.97 -uc map.uc
+
+# Create OTU table
+python ~/drive5_py/uc2otutab.py map.uc > otu_table.txt
+
+# convert OTU table to biom format
+convert_biom.py -i otu_table.txt -o otu_table.biom --biom_table_type="otu table"
+
+# assign taxonomy by BLAST using the greengenes database
+parallel_assign_taxonomy_blast.py -i otus.fa -o taxonomy/ -O 10 -t /home/elliottd/qanalysis/taxonomy/gg_13_8_otus/taxonomy/97_otu_taxonomy.txt -r /home/elliottd/qanalysis/taxonomy/gg_13_8_otus/rep_set/97_otus.fasta
+
+

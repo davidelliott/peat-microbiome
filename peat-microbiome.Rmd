@@ -1,0 +1,525 @@
+---
+output:
+  html_document:
+    fig_width: 12
+    toc: yes
+---
+
+```{r setup, message=FALSE, echo=FALSE}
+# load libraries
+library(phyloseq); library("ggplot2"); library("reshape2"); library("xtable"); library("grid"); library("vegan"); library(car); source("R/fighelper.R")
+
+# define some variables
+calcs_for_manuscript <- list()
+figfiles <- list()
+# column widths and fig resolution for plosone (mm)
+scale <- 1
+col2 <- 12*25.4*scale # 457 mm = 18 in 
+col1 <- col2/2
+dpi <- 300/scale
+
+# convert the actual width into a number of pixels for display purposes
+disp_factor <- 800/col2 
+disp1 <- col1*disp_factor
+disp2 <- col2*disp_factor
+
+col1 <- col1/25.4
+col2 <- col2/25.4
+# col was originally in mm
+# knitr update(?) stopped it working right so changed to in.
+
+theme_set(theme_bw(base_size = 14)) 
+zonepal <- c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#999999") 
+# mod from http://colorbrewer2.org/. removed "#ffff33"
+zone_shapes <- c(8,15,16,17,5,6)
+
+# Define output paths
+# out_path_prefix <- paste(Sys.Date(),sep="_")
+out_path_prefix <- "output"
+figures_dir <- paste(out_path_prefix,"figures",sep="/")
+tables_dir <- paste(out_path_prefix,"tables",sep="/")
+STATS_dir <- paste(out_path_prefix,"statistics",sep="/")
+
+# Make sure the output folders are there
+# directory creation only works to a depth of 1. The parent directory needs to be there already
+if( !file.exists(out_path_prefix) ) { dir.create(out_path_prefix) }
+
+if( !file.exists(figures_dir) ) { dir.create(figures_dir) }
+if( !file.exists(tables_dir) ) { dir.create(tables_dir) }
+if( !file.exists(STATS_dir) ) { dir.create(STATS_dir) }
+
+# load OTU analysis functions
+source("R/OTU-analysis.R")
+
+```
+
+
+Fungi and bacteria in degraded peatland undergoing restoration
+========================================================
+
+Key to zone codes
+-------------
+
+* U.OV  Unmanaged - original vegetation
+* U.Gu  Unamanaged - gully
+* M.YH  Managed - young heather
+* M.RG  Managed - restored grass
+* M.25  Managed - 25 year old heather
+* D.BP  Degraded - bare peat
+
+## Source code
+Analyses were performed in R. Commented source code is provided in file [peat-microbiome.Rmd](peat-microbiome.Rmd).
+
+## Source data
+
+```{r sources,echo=FALSE, message=FALSE}
+### Definition of source data folders
+# I used default UPARSE quality criteria after checking the effects of different settings using the fastq_stats tool.
+# I found that the defaults retain just over 50 % of reads for bacteria and fungi
+fungi_data <- "hf_uparse"
+bacteria_data <- "hb_uparse"
+
+### import BACTERIA
+biom <- import_biom(paste("data",bacteria_data,"otu_table.biom",sep="/"),taxaPrefix="X")
+map <- import_qiime_sample_data(paste("data",bacteria_data,"map.txt",sep="/"))
+tax_assignments <- read.delim(paste("data/",bacteria_data,"/taxonomy/otus_tax_assignments_mod.txt",sep=""), header=F,)
+
+row.names(tax_assignments) <- tax_assignments$V1
+taxonomy <- as.matrix(tax_assignments[2:8])
+tax = tax_table(taxonomy)
+
+expt.bacteria <- merge_phyloseq(biom, map,tax)
+expt.bacteria <- tidy_phyloseq(expt.bacteria)
+expt.archaea = subset_taxa(expt.bacteria, Kingdom == "Archaea")
+expt.bacteria = subset_taxa(expt.bacteria, Kingdom == "Bacteria")
+
+### import FUNGI
+biom <- import_biom(paste("data",fungi_data,"otu_table.biom",sep="/"),taxaPrefix="X")
+map <- import_qiime_sample_data(paste("data",fungi_data,"map.txt",sep="/"))
+tax_assignments <- read.delim(paste("data/",fungi_data,"/taxonomy_filtered/otus_tax_assignments_mod.txt",sep=""), header=F,)
+
+row.names(tax_assignments) <- tax_assignments$V1
+taxonomy <- as.matrix(tax_assignments[2:8])
+tax = tax_table(taxonomy)
+
+expt.fungi <- merge_phyloseq(biom, map,tax)
+expt.fungi <- tidy_phyloseq(expt.fungi)
+expt.fungi.all <- expt.fungi
+
+# remove possible non-fungi based on taxonomy result
+expt.fungi = subset_taxa(expt.fungi, Kingdom == "Fungi")
+
+# Remove fungi sequences without an ITS region as determined by ITSX:
+# (ITSx_1.0.7)
+ITSx_no_detections <- c("OTU_84","OTU_88","OTU_107","OTU_124","OTU_130","OTU_134","OTU_135","OTU_212","OTU_266","OTU_276","OTU_277","OTU_292","OTU_307")
+
+# All of the ITSx_no_detections were removed by subsetting taxa with kingdom=="Fungi" above
+# - they returned "No blast hit" in the taxonomy table,
+# except for OTU_84 which was identified as Ascomycota by BLAST against the UNITE database. 
+# Therefore no further action is taken because the erroneous sequences appear to have been
+# correctly excluded. This can be checked by the following:
+# tax_table(expt.fungi)[rownames(tax_table(expt.fungi))%in%ITSx_no_detections]
+# ITSx_no_detections%in%rownames(tax_table(expt.fungi))
+# otu_table(expt.fungi)["OTU_84"] 
+
+
+# Remove bacteria sequences without V3 region as determined by vxtractor:
+# (V-Xtractor v. 2.1. Copyright (c) Hartmann et al. 2010.)
+v3_not_found <- c("OTU_442")
+
+# Blast search revealed that OTU_442 is an archaeal sequence
+# No further action is required because it was removed earlier by
+# subsetting the taxonomy to include bacteria only
+# For confirmation run:
+# tax_table(expt.archaea)
+# otu_table(expt.archaea)
+
+# Remove Chloroplast. 
+expt.bacteria <- subset_taxa(expt.bacteria,Class!="Chloroplast")
+
+# ordering of zone factor according to time since restoration:
+ordered_zones <- c("D.BP","M.RG","M.YH","M.25","U.Gu","U.OV")
+sample_data(expt.bacteria)$zone <-  factor(sample_data(expt.bacteria)$zone,levels=ordered_zones)
+sample_data(expt.fungi)$zone <-  factor(sample_data(expt.fungi)$zone,levels=ordered_zones)
+
+# re-name OTUs for bacteria or fungi
+taxa_names(expt.fungi) <-   gsub(pattern="OTU_",replacement="F",x=taxa_names(expt.fungi))
+taxa_names(expt.bacteria) <-   gsub(pattern="OTU_",replacement="B",x=taxa_names(expt.bacteria))
+
+# convert OTU observations into relative abundance per sample
+expt.archaea.rel <- transform_sample_counts(expt.archaea, function(x) 100*x/(sum(x)))
+expt.bacteria.rel <- transform_sample_counts(expt.bacteria, function(x) 100*x/(sum(x)))
+expt.fungi.rel <- transform_sample_counts(expt.fungi, function(x) 100*x/(sum(x)))
+
+# merge bacteria and fungi
+expt.bac_fun.rel <- merge_phyloseq(expt.bacteria.rel,expt.fungi.rel)
+expt.bac_fun <- merge_phyloseq(expt.bacteria,expt.fungi)
+
+# merge by zone, useful for getting tables of abundances
+# division of counts by 3 is necessary to get average values, because merge_samples sums results
+expt.bac_fun.rel.zone <- merge_samples(x=expt.bac_fun.rel,group="zone")
+expt.bac_fun.rel.zone <- transform_sample_counts(expt.bac_fun.rel.zone, function(x) x/3)
+
+# repair zone classifications damaged by merge, and order factors according to time since restoration:
+sample_data(expt.bac_fun.rel.zone)$zone <-  factor(row.names(sample_data(expt.bac_fun.rel.zone)),levels=ordered_zones)
+
+# Agglomerate at phylum level
+expt.bacteria.rel.phylum <- tax_glom(expt.bacteria.rel,taxrank="Phylum")
+expt.fungi.rel.phylum <- tax_glom(expt.fungi.rel,taxrank="Phylum")
+expt.bacteria.phylum <- tax_glom(expt.bacteria,taxrank="Phylum")
+expt.fungi.phylum <- tax_glom(expt.fungi,taxrank="Phylum")
+expt.bac_fun.rel.zone.phylum <- tax_glom(expt.bac_fun.rel.zone,taxrank="Phylum")
+#expt.bac_fun.phylum <- tax_glom(expt.bac_fun,taxrank="Phylum")
+
+# remove rare OTUs for use in ordinations
+expt.bacteria.rr <- prune_taxa( (taxa_sums(expt.bacteria) / sum(taxa_sums(expt.bacteria)))>0.0001, expt.bacteria)
+expt.bacteria.rel.rr <- prune_taxa( taxa_names(expt.bacteria.rr), expt.bacteria.rel)
+expt.fungi.rr <- prune_taxa( (taxa_sums(expt.fungi) / sum(taxa_sums(expt.fungi)))>0.0001, expt.fungi)
+expt.fungi.rel.rr <- prune_taxa( taxa_names(expt.fungi.rr), expt.fungi.rel)
+
+# save some results for convenient inclusion in manuscript
+calcs_for_manuscript["n archaeal observations"] <- sum(otu_table(expt.archaea))
+calcs_for_manuscript["n bacterial observations"] <- sum(otu_table(expt.bacteria))
+calcs_for_manuscript["n fungal observations"] <- sum(otu_table(expt.fungi))
+calcs_for_manuscript["n archael OTUs"] <- ntaxa(expt.archaea)
+calcs_for_manuscript["n bacterial OTUs"] <- ntaxa(expt.bacteria)
+calcs_for_manuscript["n fungal OTUs"] <- ntaxa(expt.fungi)
+calcs_for_manuscript["n bacterial phyla"] <- ntaxa(expt.bacteria.rel.phylum)
+calcs_for_manuscript["n fungal phyla"] <- ntaxa(expt.fungi.rel.phylum)
+
+```
+
+There were 94627 bacterial and 84552 fungal raw reads off the sequencer. UPARSE clustered OTUs and BLAST assigned taxonomy were imported and analysed using the [phyloseq](http://dx.plos.org/10.1371/journal.pone.0061217) package for R. The source data for bacteria and fungi can be found in folders [data/hb_uparse](data/hb_uparse) and [data/hf_uparse](data/hf_uparse) respectively. Those folders also contain a record of commands used to prepare the raw sequences to this stage. 
+
+```{r expt_info}
+print(expt.bacteria)
+print(expt.fungi)
+```
+
+Number of quality controlled reads per sample:
+```{r reads}
+colSums(otu_table(expt.bacteria))
+colSums(otu_table(expt.fungi))
+```
+
+
+```{r chem_env, fig.width=5, echo=FALSE}
+# get the sample data
+map.df <- data.frame(sample_data(expt.bacteria))
+map.df2 <- data.frame(sample_data(expt.fungi)) 
+
+# melt for plotting
+chemistry.melt <- melt(map.df,measure.vars=c("pH","Moisture","OM","Ammonium","Nitrate","P","K","Pb","Cd","Cu"))
+
+# Add linebreak to zone for plotting
+chemistry.melt$zone <- gsub(x=chemistry.melt$zone,pattern="[.]",replacement="\n")
+
+# Set the plotting order
+chemistry.melt$plot_order <- 0
+chemistry.melt[chemistry.melt$zone=="D\nBP","plot_order"] <- 1
+chemistry.melt[chemistry.melt$zone=="M\nRG","plot_order"] <- 2
+chemistry.melt[chemistry.melt$zone=="M\nYH","plot_order"] <- 3
+chemistry.melt[chemistry.melt$zone=="M\n25","plot_order"] <- 4
+chemistry.melt[chemistry.melt$zone=="U\nGu","plot_order"] <- 5
+chemistry.melt[chemistry.melt$zone=="U\nOV","plot_order"] <- 6
+chemistry.melt$zone <- reorder(chemistry.melt$zone,chemistry.melt$plot_order)
+
+# make the plot 
+chem.plot <-   ggplot(chemistry.melt, aes(x=zone, y=value, shape=zone, colour=zone)) + stat_summary(fun.data = "mean_se", size=1) + facet_wrap(~variable,scales = "free_y",nrow=2) + labs(x = "Zone") + theme(aspect.ratio=1,legend.position="none") + scale_colour_manual(values=zonepal) + scale_shape_manual(values=zone_shapes) 
+
+
+```
+
+## Figures and Tables
+```{r cfu,fig.height=5,echo=FALSE,message=FALSE}
+
+cfu_cols <- c("zone","group","management","cfu_per_g")
+cfu <- rbind(map.df[,cfu_cols],map.df2[,cfu_cols])
+cfu$kingdom <- cfu$group
+
+# Set the plotting order
+cfu$plot_order <- 0
+cfu[cfu$zone=="D.BP","plot_order"] <- 1
+cfu[cfu$zone=="M.RG","plot_order"] <- 2
+cfu[cfu$zone=="M.YH","plot_order"] <- 3
+cfu[cfu$zone=="M.25","plot_order"] <- 4
+cfu[cfu$zone=="U.Gu","plot_order"] <- 5
+cfu[cfu$zone=="U.OV","plot_order"] <- 6
+cfu$zone <- reorder(cfu$zone,cfu$plot_order)
+
+# make the plot
+cfu.plot <-   ggplot(cfu, aes(x=zone, y=cfu_per_g, shape=kingdom, colour=kingdom)) + stat_summary(fun.data = "mean_se", size=1,position=position_dodge(0.45)) +  labs(x = "Zone", y = expression(paste("CFU ", g^-1, sep=""))) + theme(aspect.ratio=1) + scale_y_log10(breaks=c(1000,10000,100000,1000000,10000000)) 
+
+```
+
+
+```{r phylum_plots,results='hide',echo=FALSE}
+# plot the phyla abundance
+
+bac <- subset_taxa(expt.bac_fun.rel.zone.phylum,Kingdom=="Bacteria")
+fun <- subset_taxa(expt.bac_fun.rel.zone.phylum,Kingdom=="Fungi")
+
+  # keep only top N taxa (because of colour palette / plotting limitations)
+  TopNOTUs <- names(sort(taxa_sums(bac), TRUE)[1:9])
+  bac <- prune_taxa(TopNOTUs, bac)
+
+
+bac.phyla <- plot_bar(bac,x = "zone",fill = "Phylum") + geom_bar(stat="identity") + coord_flip() + labs(y="percentage of sequences", x="")  + scale_fill_brewer(palette="Set3",name = "Bacterial phyla")
+
+fun.phyla <- plot_bar(fun,x = "zone",fill = "Phylum") + geom_bar(stat="identity") + coord_flip() + labs(y="percentage of sequences", x="") + scale_fill_brewer(palette="Set2", name="Fungal phyla") 
+
+# Make the figure graphic
+figfile.phylum <- paste(figures_dir, "/fig[phyla]", sep="")
+png(paste(figfile.phylum,".png",sep=""),width=col2,height=col1,res=dpi,units="in")
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(2,1)))
+print(bac.phyla, vp=viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(fun.phyla, vp=viewport(layout.pos.row = 2, layout.pos.col = 1))
+dev.off()
+
+```
+
+```{r abundant_otus_v2,echo=FALSE,message=FALSE,results='asis'}
+# TODO - simplify this section
+
+rankdata <- list()
+name <- "bacteria"
+for (expt in c(expt.bacteria.rel,expt.fungi.rel)) {
+  expt.by_zone <- merge_samples(expt,group="zone")
+  expt.by_zone <- transform_sample_counts(expt.by_zone, function(x) x/3)
+  by_zone <- as.data.frame(t(otu_table(expt.by_zone)))
+  
+  taxonomy <- data.frame()
+  # Find out the taxonomy for the top OTUs. If errors occur here then look for NA in tax_table
+  taxonomy <- tax_table(expt.by_zone)[rownames(by_zone)]
+  by_zone_plus_tax <- by_zone
+  by_zone_plus_tax$taxonomy <- as.factor(taxonomy[,"Phylum"])
+  by_zone_plus_tax$OTU <- row.names(taxonomy)
+  by_zone.melt <- melt(by_zone_plus_tax,id=c("OTU","taxonomy"),variable.name = "zone")
+  
+  # Now sort the melted data for each of the zones
+  by_zone.melt.ordered <- by_zone.melt[order(by_zone.melt$zone,-by_zone.melt$value),]
+  # Add the rank
+  by_zone.melt.ordered$rank <- 1:nrow(by_zone)
+  
+  # remove zero observations
+  by_zone.melt.ordered <- by_zone.melt.ordered[by_zone.melt.ordered$value > 0,]
+  by_zone.melt.ordered$log_value <- log(by_zone.melt.ordered$value)
+  by_zone.melt.ordered$kingdom <- name
+  rankdata[[name]] <- by_zone.melt.ordered
+
+  by_zone$mean <- apply(X=by_zone,MARGIN=1,FUN=mean)
+  by_zone <- by_zone[order(by_zone$mean,decreasing=TRUE) , ]
+  # colSums(by_zone) # <== this can be used as a check
+  
+  by_zone <- cbind(by_zone,taxonomy)
+
+  name <- "fungi"
+}
+
+rankdata.all <- rbind(rankdata[["bacteria"]] , rankdata[["fungi"]])
+rankdata.all <- cbind(rankdata.all)
+
+# make the plot
+rank.plot <- 
+  ggplot(data=rankdata.all, aes(x=rank,y=value,group=zone)) + geom_line(aes(colour=zone),size=1.5,alpha=0.6) + scale_y_log10(breaks=c(0.01,0.1,1,10,100)) + scale_colour_manual(values=zonepal) + ggtitle("OTU rank abundance") + labs(x = "OTU rank", y = "percentage of sequences") + facet_wrap(~kingdom,ncol=1) # lty="dashed"
+ 
+```
+
+
+```{r ordination,echo=FALSE,fig.height=10,fig.width=10,fig.keep='none',results='asis', eval=TRUE}
+
+  # confidence limit for ellipses (method used is SD, SE also available)
+  confidence=0.99
+  # Significance of variables to the ordination will be calculated. 
+  # The most significant ones will be plotted as defined by this cutoff
+  biplot_sig_cutoff <- 0.05
+
+expt.bac_fun.rr <- merge_phyloseq(expt.fungi.rr,expt.bacteria.rr)
+expt.bac_fun.rel.rr <- merge_phyloseq(expt.bacteria.rel.rr,expt.fungi.rel.rr)
+
+ord_expt_list <- list(
+    "bacteria" = expt.bacteria.rr,
+		"fungi" = expt.fungi.rr
+	)
+
+item <- 1
+figfile.ord <- paste(figures_dir, "/Fig[ordination]", sep="")
+png(paste(figfile.ord,".png",sep=""), res=dpi , width = col2, height = col2/2,units="in")
+par(mfrow=c(1,2)) # make 2 plots appear side by side
+par(pty="s") # make the plot area square
+ords <- list("bacteria" = NA, "fungi" = NA)
+ords.unc <- ords
+for(expt.ord in ord_expt_list) {
+  name <- names(ord_expt_list[item])
+  item <- item+1
+  
+  # ordinate using phyloseq
+  ## constrained - for the main figure
+  ord <- ordinate(expt.ord, "CCA",formula=~zone) 
+  ## unconstrained - for supplementary
+  ord.unconstrained <- ordinate(expt.ord, "CCA") 
+  # store the ordination objects for use outside of this loop
+  ords[[name]] <- ord
+  ords.unc[[name]] <- ord.unconstrained
+  
+  con_sites <-  plot_ordination(expt.ord,ord,"sites",title="Constrained by zone",color="zone",shape="management")  + theme(aspect.ratio=1)   + geom_point(size = 6,fill="white")
+  x_label <- as.character(con_sites$labels["x"])
+  y_label <- as.character(con_sites$labels["y"])
+  
+  ord.ef <- envfit(ord~altitude+Pb+Cu+Zn+Cd+K+P+Nitrate+Ammonium+OM+Moisture+pH+Conductivity,permu=1000,data = map.df)
+  
+  # start with a blank plot
+  plot(ord,type="none",xlab=x_label,ylab=y_label,main=name) 
+  # Note alpha goes from 0-255. It's best to leave some transparency to preserve the grid visibility
+  
+  # add ellipses first
+  i <- 1
+  for( z in ordered_zones) {
+    ordiellipse(ord, map.df$zone,show.groups=z,draw="polygon",alpha=80,lwd=1,label=FALSE,cex=0.7,kind="sd",conf=confidence,col=zonepal[i],lty=0) 
+    i <- i+1
+  }
+  
+  # plot the points for each zone and type
+  i <- 1
+  for( z in ordered_zones) {
+    points(ord, disp="si", select=(map.df$zone==z),cex = 1, pch=zone_shapes[i], col=zonepal[i])
+    i <- i+1
+  }
+  
+  # show the most significant variables
+  plot(ord.ef,p.max=biplot_sig_cutoff,col="black",lwd=3,cex=1) # lwd=5  -- had no effect 
+  
+  # add legend
+  legend("topleft", cex=0.9, inset=c(-0.0,0), legend=ordered_zones, bty = "n", col = zonepal, pch = zone_shapes)
+
+}
+dev.off()
+
+# prepare supplementary figures
+  
+uncf <- plot_ordination(expt.fungi.rr,ords.unc[["fungi"]],"sites",title="Unconstrained fungal ordination",color="zone",shape="zone") + geom_point(size = 6) + theme(aspect.ratio=1) + scale_shape_manual(values=zone_shapes, name="zone") + scale_colour_manual(values=zonepal, name="zone") + geom_point(size = 6,fill="white")
+uncb <- plot_ordination(expt.bacteria.rr,ords.unc[["bacteria"]],"sites",title="Unconstrained bacterial ordination",color="zone",shape="zone") + geom_point(size = 6) + theme(aspect.ratio=1) + scale_shape_manual(values=zone_shapes, name="zone") + scale_colour_manual(values=zonepal, name="zone") + geom_point(size = 6,fill="white")
+
+figfile.ord_unc <- paste(figures_dir, "unconstrained_ordinations", sep="/")
+png(paste(figfile.ord_unc,".png",sep=""), res=dpi , width = col2, height = col2/2,units="in")
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(1,2)))
+print(uncb, vp=viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(uncf, vp=viewport(layout.pos.row = 1, layout.pos.col = 2))
+# Close the device.
+dev.off()
+  
+screef <- plot_scree(ords[["fungi"]], "Scree plot for constrained fungal ordination") + theme(axis.text=element_text(size=8))
+screeb <- plot_scree(ords[["bacteria"]], "Scree plot for constrained bacterial ordination") + theme(axis.text=element_text(size=8)) 
+screefu <- plot_scree(ords.unc[["fungi"]], "Scree plot for unconstrained fungal ordination") + theme(axis.text=element_text(size=8))
+screebu <- plot_scree(ords.unc[["bacteria"]], "Scree plot for unconstrained bacterial ordination") + theme(axis.text=element_text(size=8))
+
+figfile.scree <- paste(figures_dir, "scree", sep="/")
+png(paste(figfile.scree,".png",sep=""), res=dpi , width = col2, height = col2/2,units="in")
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(2,2)))
+print(screeb, vp=viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(screebu, vp=viewport(layout.pos.row = 2, layout.pos.col = 1))
+print(screef, vp=viewport(layout.pos.row = 1, layout.pos.col = 2))
+print(screefu, vp=viewport(layout.pos.row = 2, layout.pos.col = 2))
+# Close the device.
+dev.off()
+```
+
+```{r otu_tables,results='asis',echo=FALSE,warning=FALSE}
+
+
+# make a table of all phyla 
+
+otup <- as.data.frame(t(otu_table(expt.bac_fun.rel.zone.phylum)))
+taxp <- as.data.frame(tax_table(expt.bac_fun.rel.zone.phylum))
+otu_taxp <- cbind(taxp, otup)
+otu_taxp <- otu_taxp[,c(1,2,8:ncol(otu_taxp))]
+
+
+```
+
+
+```{r pairwise_analysis,results='hide',echo=FALSE,warning=FALSE}
+# Analyses should not be based on the combined objects because the bacterial sequence count 
+# should not affect the fungal expected value and vice-versa.
+
+
+# perform analysis on phyla
+phyla_DBP_vs_UOV.bac <- compare_pairs(phy=expt.bacteria.phylum,factor="zone",group1="D.BP",group2="U.OV",topN=999,include_otus=NA,name="bac_phyla")
+phyla_DBP_vs_UOV.fun <- compare_pairs(phy=expt.fungi.phylum,factor="zone",group1="D.BP",group2="U.OV",topN=999,include_otus=NA,name="fun_phyla")
+
+phyla_DBP_vs_UOV <- rbind(phyla_DBP_vs_UOV.bac,phyla_DBP_vs_UOV.fun)
+
+# Put in order of the BP/OV difference
+phyla_DBP_vs_UOV$diff <- phyla_DBP_vs_UOV$D.BP_pc - phyla_DBP_vs_UOV$U.OV_pc
+phyla_DBP_vs_UOV <- phyla_DBP_vs_UOV[order(phyla_DBP_vs_UOV$diff),]
+
+```
+
+
+```{r figures,results='asis',echo=FALSE,fig.width=20, warning=FALSE}
+# Store all figures and tables in the figfiles list.
+# Order in the list will affect numbering
+
+# chemistry plot
+figfile <- paste(figures_dir, "/fig[chem]", sep="")
+figfiles[["chem"]] <- list(plot = chem.plot, file = figfile, legend="Plant nutrients, soil properties, and heavy metals.",width=col2,height=col2/2,res=dpi,display_width=disp2)
+
+# CFU plot
+figfile <- paste(figures_dir, "/fig[cfu]", sep="")
+figfiles[["cfu"]] <- list(plot = cfu.plot, file = figfile, legend="Cultivable numbers of bacteria and fungi detected in each zone.",width=col1,height=col1*0.8,res=dpi,display_width=disp1)
+
+# rank abundance plot
+figfile <- paste(figures_dir, "/fig[rank]", sep="")
+figfiles[["rankf"]] <- list(plot = rank.plot, file = figfile, legend="Rank abundance of bacterial and fungal OTUs in each zone.",width=col1,height=col1,res=dpi,display_width=disp1)
+
+# Phylum plot (pre-rendered)
+figfiles[["phyla"]] <- list(plot="pre_rendered", file = figfile.phylum, legend="Relative abundance of bacterial and fungal phyla (within each kingdom) in the six zones.",width=col2,height=col1/2,res=dpi,display_width=disp2)
+
+# ordination (pre-rendered)
+figfiles[["ord"]] <- list(plot="pre_rendered", file = figfile.ord, legend="Correspondence analysis of bacterial and fungal communities, constrained by vegetation zone.",width=col2,height=col2/2,res=dpi,display_width=disp2)
+
+# phylum table
+figfile <- paste(tables_dir,"/Table[phyla-all].csv",sep="")
+figfiles[["all_phyla"]] <- list(supplementary = "Table", table = otu_taxp, file = figfile, legend="Mean relative abundance of all phyla in each zone. Relative abundances are expressed as a percentage within each kingdom (i.e. columns add up to 200 %)")
+
+# phylum chi squared table
+figfile <- paste(tables_dir,"/Table[phyla-xsq].csv",sep="")
+figfiles[["phyla-xsq"]] <- list(supplementary = "Table", table = phyla_DBP_vs_UOV[,1:10], file = figfile, legend="Pairwise comparisons of phylum abundance in D.BP and U.OV. Note that p-values of 0 in the linked file actually mean <2.2e-16.")
+
+# unconstrained ordination (pre-rendered)
+figfiles[["ord_unconstrained"]] <- list(supplementary = "Figure", plot="pre_rendered", file = figfile.ord_unc, legend="Unconstrained correspondence analyses.",width=col2,height=col2/2,res=dpi,display_width=disp2)
+
+# scree plots (pre-rendered)
+figfiles[["scree"]] <- list(supplementary = "Figure", plot="pre_rendered", file = figfile.scree, legend="Scree plots for constrained and unconstrained ordinations ",width=col2,height=col2/2,res=dpi,display_width=disp2)
+
+
+# make figures and tables (export graphics and .csv)
+build_figures(figfiles)
+
+# display figures and tables
+display_figures(figfiles,1,0,2)
+
+```
+
+
+## Calculations for manuscript text
+
+```{r calcs,echo=FALSE}
+print(calcs_for_manuscript)
+
+```
+
+## R package versions
+```{r packages}
+print(sessionInfo(), locale = FALSE)
+
+```
+
+## Citations
+```{r cite}
+citation("vegan")
+citation("phyloseq")
+```
