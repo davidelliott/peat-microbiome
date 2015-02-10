@@ -14,7 +14,7 @@ tidy_phyloseq <- function(my_phyloseq){
 # This test uses chisq. An alternative might be Fishers exact test
 compare_pairs <- function(phy,factor="zone",group1="D.BP",group2="U.OV",topN=30,include_otus=NA,name="") {
   
-  outfile <- paste(STATS_dir,"/ChiSq_",name,"_",group1,"_",group2,".txt",sep="")
+  outfile <- NULL
   
   # Identify the top N OTUs before doing any subsetting
   TopNOTUs <- names(sort(taxa_sums(phy), TRUE)[1:topN])

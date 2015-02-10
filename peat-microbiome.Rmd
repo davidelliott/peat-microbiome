@@ -38,15 +38,12 @@ zone_shapes <- c(8,15,16,17,5,6)
 out_path_prefix <- "output"
 figures_dir <- paste(out_path_prefix,"figures",sep="/")
 tables_dir <- paste(out_path_prefix,"tables",sep="/")
-STATS_dir <- paste(out_path_prefix,"statistics",sep="/")
 
 # Make sure the output folders are there
 # directory creation only works to a depth of 1. The parent directory needs to be there already
 if( !file.exists(out_path_prefix) ) { dir.create(out_path_prefix) }
-
 if( !file.exists(figures_dir) ) { dir.create(figures_dir) }
 if( !file.exists(tables_dir) ) { dir.create(tables_dir) }
-if( !file.exists(STATS_dir) ) { dir.create(STATS_dir) }
 
 # load OTU analysis functions
 source("R/OTU-analysis.R")
@@ -54,7 +51,7 @@ source("R/OTU-analysis.R")
 ```
 
 
-Fungi and bacteria in degraded peatland undergoing restoration
+Bacterial and fungal communities in a degraded ombotrophic peatland undergoing natural and managed re-vegetation
 ========================================================
 
 Key to zone codes
@@ -112,16 +109,18 @@ expt.fungi = subset_taxa(expt.fungi, Kingdom == "Fungi")
 # Remove fungi sequences without an ITS region as determined by ITSX:
 # (ITSx_1.0.7)
 ITSx_no_detections <- c("OTU_84","OTU_88","OTU_107","OTU_124","OTU_130","OTU_134","OTU_135","OTU_212","OTU_266","OTU_276","OTU_277","OTU_292","OTU_307")
+ITSx_no_ITS1 <- c("OTU_65","OTU_161")
 
-# All of the ITSx_no_detections were removed by subsetting taxa with kingdom=="Fungi" above
+# All of the ITSx_no_detections and ITSx_no_ITS1 were removed by subsetting taxa with kingdom=="Fungi" above
 # - they returned "No blast hit" in the taxonomy table,
 # except for OTU_84 which was identified as Ascomycota by BLAST against the UNITE database. 
 # Therefore no further action is taken because the erroneous sequences appear to have been
 # correctly excluded. This can be checked by the following:
 # tax_table(expt.fungi)[rownames(tax_table(expt.fungi))%in%ITSx_no_detections]
-# ITSx_no_detections%in%rownames(tax_table(expt.fungi))
-# otu_table(expt.fungi)["OTU_84"] 
-
+# tax_table(expt.fungi)[rownames(tax_table(expt.fungi))%in%ITSx_no_ITS1]
+# ITSx_no_detections%in%rownames(tax_table(expt.fungi)) # Returns all FALSE
+# ITSx_no_ITS1%in%rownames(tax_table(expt.fungi)) # Returns all FALSE
+# tax_table(expt.fungi)["OTU_84"] 
 
 # Remove bacteria sequences without V3 region as determined by vxtractor:
 # (V-Xtractor v. 2.1. Copyright (c) Hartmann et al. 2010.)
@@ -145,6 +144,12 @@ sample_data(expt.fungi)$zone <-  factor(sample_data(expt.fungi)$zone,levels=orde
 # re-name OTUs for bacteria or fungi
 taxa_names(expt.fungi) <-   gsub(pattern="OTU_",replacement="F",x=taxa_names(expt.fungi))
 taxa_names(expt.bacteria) <-   gsub(pattern="OTU_",replacement="B",x=taxa_names(expt.bacteria))
+
+# merge by zone for diversity metrics
+expt.bacteria.zone <- merge_samples(expt.bacteria,group="zone")
+sample_data(expt.bacteria.zone)$zone <- factor(sample_names(expt.bacteria.zone))
+expt.fungi.zone <- merge_samples(expt.fungi,group="zone")
+sample_data(expt.fungi.zone)$zone <- factor(sample_names(expt.fungi.zone))
 
 # convert OTU observations into relative abundance per sample
 expt.archaea.rel <- transform_sample_counts(expt.archaea, function(x) 100*x/(sum(x)))
@@ -187,6 +192,15 @@ calcs_for_manuscript["n fungal OTUs"] <- ntaxa(expt.fungi)
 calcs_for_manuscript["n bacterial phyla"] <- ntaxa(expt.bacteria.rel.phylum)
 calcs_for_manuscript["n fungal phyla"] <- ntaxa(expt.fungi.rel.phylum)
 
+calcs_for_manuscript["mean seqs per sample fungi"] <- round(calcs_for_manuscript[["n fungal observations"]] / 18)
+calcs_for_manuscript["mean seqs per sample bacteria"] <- round(calcs_for_manuscript[["n bacterial observations"]] / 18)
+calcs_for_manuscript["mean seqs per sample per kingdom"] <- round((calcs_for_manuscript[["n fungal observations"]] + calcs_for_manuscript[["n bacterial observations"]])  / 36)
+
+calcs_for_manuscript["mean seqs per zone fungi"] <- calcs_for_manuscript[["mean seqs per sample fungi"]] * 3
+calcs_for_manuscript["mean seqs per zone bacteria"] <- calcs_for_manuscript[["mean seqs per sample bacteria"]] * 3
+calcs_for_manuscript["mean seqs per zone per kingdom"] <- calcs_for_manuscript[["mean seqs per sample per kingdom"]] * 3
+
+
 ```
 
 There were 94627 bacterial and 84552 fungal raw reads off the sequencer. UPARSE clustered OTUs and BLAST assigned taxonomy were imported and analysed using the [phyloseq](http://dx.plos.org/10.1371/journal.pone.0061217) package for R. The source data for bacteria and fungi can be found in folders [data/hb_uparse](data/hb_uparse) and [data/hf_uparse](data/hf_uparse) respectively. Those folders also contain a record of commands used to prepare the raw sequences to this stage. 
@@ -200,6 +214,12 @@ Number of quality controlled reads per sample:
 ```{r reads}
 colSums(otu_table(expt.bacteria))
 colSums(otu_table(expt.fungi))
+```
+
+Number of quality controlled reads per zone:
+```{r reads2}
+rowSums(otu_table(expt.bacteria.zone))
+rowSums(otu_table(expt.fungi.zone))
 ```
 
 
@@ -227,7 +247,7 @@ chemistry.melt$zone <- reorder(chemistry.melt$zone,chemistry.melt$plot_order)
 # make the plot 
 chem.plot <-   ggplot(chemistry.melt, aes(x=zone, y=value, shape=zone, colour=zone)) + stat_summary(fun.data = "mean_se", size=1) + facet_wrap(~variable,scales = "free_y",nrow=2) + labs(x = "Zone") + theme(aspect.ratio=1,legend.position="none") + scale_colour_manual(values=zonepal) + scale_shape_manual(values=zone_shapes) 
 
-
+calcs_for_manuscript["mean pH all samples"] <- mean(map.df$pH)
 ```
 
 ## Figures and Tables
@@ -263,7 +283,6 @@ fun <- subset_taxa(expt.bac_fun.rel.zone.phylum,Kingdom=="Fungi")
   TopNOTUs <- names(sort(taxa_sums(bac), TRUE)[1:9])
   bac <- prune_taxa(TopNOTUs, bac)
 
-
 bac.phyla <- plot_bar(bac,x = "zone",fill = "Phylum") + geom_bar(stat="identity") + coord_flip() + labs(y="percentage of sequences", x="")  + scale_fill_brewer(palette="Set3",name = "Bacterial phyla")
 
 fun.phyla <- plot_bar(fun,x = "zone",fill = "Phylum") + geom_bar(stat="identity") + coord_flip() + labs(y="percentage of sequences", x="") + scale_fill_brewer(palette="Set2", name="Fungal phyla") 
@@ -280,40 +299,30 @@ dev.off()
 ```
 
 ```{r abundant_otus_v2,echo=FALSE,message=FALSE,results='asis'}
-# TODO - simplify this section
+# rank abundance plot
+# and diversity metrics supplementary plot
 
 rankdata <- list()
 name <- "bacteria"
 for (expt in c(expt.bacteria.rel,expt.fungi.rel)) {
+  # merde data by zone (sum)
   expt.by_zone <- merge_samples(expt,group="zone")
+  # divide by 3 to get the average abundance of each OTU
   expt.by_zone <- transform_sample_counts(expt.by_zone, function(x) x/3)
+  # get the OTU table into a dataframe
   by_zone <- as.data.frame(t(otu_table(expt.by_zone)))
-  
-  taxonomy <- data.frame()
-  # Find out the taxonomy for the top OTUs. If errors occur here then look for NA in tax_table
-  taxonomy <- tax_table(expt.by_zone)[rownames(by_zone)]
-  by_zone_plus_tax <- by_zone
-  by_zone_plus_tax$taxonomy <- as.factor(taxonomy[,"Phylum"])
-  by_zone_plus_tax$OTU <- row.names(taxonomy)
-  by_zone.melt <- melt(by_zone_plus_tax,id=c("OTU","taxonomy"),variable.name = "zone")
-  
-  # Now sort the melted data for each of the zones
+  # melt the dataframe
+  by_zone.melt <- melt(by_zone,variable.name = "zone")
+  # Sort the melted data for each of the zones
   by_zone.melt.ordered <- by_zone.melt[order(by_zone.melt$zone,-by_zone.melt$value),]
   # Add the rank
   by_zone.melt.ordered$rank <- 1:nrow(by_zone)
-  
   # remove zero observations
   by_zone.melt.ordered <- by_zone.melt.ordered[by_zone.melt.ordered$value > 0,]
-  by_zone.melt.ordered$log_value <- log(by_zone.melt.ordered$value)
+  # store results in a named list
   by_zone.melt.ordered$kingdom <- name
   rankdata[[name]] <- by_zone.melt.ordered
-
-  by_zone$mean <- apply(X=by_zone,MARGIN=1,FUN=mean)
-  by_zone <- by_zone[order(by_zone$mean,decreasing=TRUE) , ]
-  # colSums(by_zone) # <== this can be used as a check
-  
-  by_zone <- cbind(by_zone,taxonomy)
-
+  # set name for list element in next iteration
   name <- "fungi"
 }
 
@@ -323,7 +332,43 @@ rankdata.all <- cbind(rankdata.all)
 # make the plot
 rank.plot <- 
   ggplot(data=rankdata.all, aes(x=rank,y=value,group=zone)) + geom_line(aes(colour=zone),size=1.5,alpha=0.6) + scale_y_log10(breaks=c(0.01,0.1,1,10,100)) + scale_colour_manual(values=zonepal) + ggtitle("OTU rank abundance") + labs(x = "OTU rank", y = "percentage of sequences") + facet_wrap(~kingdom,ncol=1) # lty="dashed"
- 
+
+# And diversity metrics for supplemental data
+metrics <- c("Chao1","Shannon","Simpson")
+# note that these plots show data that is merged (sum) by zone
+diversity_b <- plot_richness(expt.bacteria.zone,x = "zone",measures=metrics,color = "zone",shape="zone",title="bacteria (per zone)") + geom_point(size = 5, alpha = 0.7) + scale_colour_manual(values=zonepal) +guides(colour=FALSE, shape=FALSE) + scale_shape_manual(values=zone_shapes) 
+diversity_f <- plot_richness(expt.fungi.zone,x = "zone",measures=metrics,color = "zone",shape="zone", title="fungi (per zone)") + geom_point(size = 5, alpha = 0.7) + scale_colour_manual(values=zonepal) +guides(colour=FALSE, shape=FALSE) + scale_shape_manual(values=zone_shapes) 
+
+## Same again but per sample
+diversity_b_alt <- plot_richness(expt.bacteria,x = "zone",measures=metrics,color = "zone",shape="zone",title="bacteria (per sample)") + geom_point(size = 5, alpha = 0.7) + scale_colour_manual(values=zonepal) +guides(colour=FALSE, shape=FALSE) + scale_shape_manual(values=zone_shapes) 
+diversity_f_alt <- plot_richness(expt.fungi,x = "zone",measures=metrics,color = "zone",shape="zone", title="fungi (per sample)") + geom_point(size = 5, alpha = 0.7) + scale_colour_manual(values=zonepal) +guides(colour=FALSE, shape=FALSE) + scale_shape_manual(values=zone_shapes) 
+
+# remove unwanted small points on all the plots (we overplotted with bigger points)
+diversity_b$layers <- diversity_b$layers[-1]
+diversity_f$layers <- diversity_f$layers[-1]
+diversity_b_alt$layers <- diversity_b_alt$layers[-1]
+diversity_f_alt$layers <- diversity_f_alt$layers[-1]
+
+# Both on one plot (samples individually and merged)
+#b1 <- diversity_b$data
+#b2 <- diversity_b_alt$data
+#b1$data <- "zone_combined"
+#b2$data <- "per_sample"
+#bc <- rbind(b1,b2)
+#ggplot(data = bc) + geom_point(aes(x=zone,y=value,size=data, colour=zone)) + facet_wrap(~variable,scales = "free_y")  #+ geom_errorbar(aes(ymax = value + se, ymin=value - se)) 
+
+figfile.diversity <- paste(figures_dir, "diversity", sep="/")
+png(paste(figfile.diversity,".png",sep=""), res=dpi , width = col2, height = col2,units="in")
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(2,2)))
+print(diversity_b, vp=viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(diversity_f, vp=viewport(layout.pos.row = 1, layout.pos.col = 2))
+print(diversity_b_alt, vp=viewport(layout.pos.row = 2, layout.pos.col = 1))
+print(diversity_f_alt, vp=viewport(layout.pos.row = 2, layout.pos.col = 2))
+# Close the device.
+dev.off()
+
+
 ```
 
 
@@ -401,6 +446,10 @@ dev.off()
 uncf <- plot_ordination(expt.fungi.rr,ords.unc[["fungi"]],"sites",title="Unconstrained fungal ordination",color="zone",shape="zone") + geom_point(size = 6) + theme(aspect.ratio=1) + scale_shape_manual(values=zone_shapes, name="zone") + scale_colour_manual(values=zonepal, name="zone") + geom_point(size = 6,fill="white")
 uncb <- plot_ordination(expt.bacteria.rr,ords.unc[["bacteria"]],"sites",title="Unconstrained bacterial ordination",color="zone",shape="zone") + geom_point(size = 6) + theme(aspect.ratio=1) + scale_shape_manual(values=zone_shapes, name="zone") + scale_colour_manual(values=zonepal, name="zone") + geom_point(size = 6,fill="white")
 
+# remove unwanted small points (we overplotted with larger ones)
+uncf$layers <- uncf$layers[-1]
+uncb$layers <- uncb$layers[-1]
+
 figfile.ord_unc <- paste(figures_dir, "unconstrained_ordinations", sep="/")
 png(paste(figfile.ord_unc,".png",sep=""), res=dpi , width = col2, height = col2/2,units="in")
 grid.newpage()
@@ -428,8 +477,6 @@ dev.off()
 ```
 
 ```{r otu_tables,results='asis',echo=FALSE,warning=FALSE}
-
-
 # make a table of all phyla 
 
 otup <- as.data.frame(t(otu_table(expt.bac_fun.rel.zone.phylum)))
@@ -437,14 +484,11 @@ taxp <- as.data.frame(tax_table(expt.bac_fun.rel.zone.phylum))
 otu_taxp <- cbind(taxp, otup)
 otu_taxp <- otu_taxp[,c(1,2,8:ncol(otu_taxp))]
 
-
 ```
-
 
 ```{r pairwise_analysis,results='hide',echo=FALSE,warning=FALSE}
 # Analyses should not be based on the combined objects because the bacterial sequence count 
 # should not affect the fungal expected value and vice-versa.
-
 
 # perform analysis on phyla
 phyla_DBP_vs_UOV.bac <- compare_pairs(phy=expt.bacteria.phylum,factor="zone",group1="D.BP",group2="U.OV",topN=999,include_otus=NA,name="bac_phyla")
@@ -455,6 +499,87 @@ phyla_DBP_vs_UOV <- rbind(phyla_DBP_vs_UOV.bac,phyla_DBP_vs_UOV.fun)
 # Put in order of the BP/OV difference
 phyla_DBP_vs_UOV$diff <- phyla_DBP_vs_UOV$D.BP_pc - phyla_DBP_vs_UOV$U.OV_pc
 phyla_DBP_vs_UOV <- phyla_DBP_vs_UOV[order(phyla_DBP_vs_UOV$diff),]
+
+```
+
+
+```{r comparisons_alt, echo=FALSE, warning=FALSE}
+
+## Statistical tests for chemistry and CFU data
+
+# NOTE
+# map.df is bacteria
+# map.df2 is fungi
+# using map.df for this section
+# add named cols for bacteria and fungi cfu:
+
+identical(rownames(map.df),rownames(map.df2))
+map.df$bacteria_cfu <- map.df$cfu_per_g
+map.df$fungi_cfu <- map.df2$cfu_per_g
+
+# list the variables of interest
+vars <- c("pH","Moisture","OM","Ammonium","Nitrate","P","K","Pb","Cd","Cu","bacteria_cfu","fungi_cfu")
+# make a list to store all our statistical results
+tests <- list()
+# pre-allocate a character vector to store test results temporarily
+res <- character(4)
+# for the first list entry, add the titles for the table we will build after
+res[1:4] <- c("variable","factor","W","P")
+tests[[length(tests)+1]] <- res
+
+# Now do all the tests and store results in the tests list:
+
+map.df$stage <- "other"
+early <- c("D.BP","M.RG","M.YH")
+map.df[map.df$zone %in% early,"stage"] <- "early"
+map.df$stage <- as.factor(map.df$stage)
+
+res[2] <- "bare peat and early stage restoration/other"
+for(v in vars) {
+  t <- wilcox.test(map.df[[v]] ~ map.df[["stage"]])
+  res[1] <- v
+  res[3:4] <- c(t$statistic,t$p.value)
+  tests[[length(tests)+1]] <- res
+}
+
+map.df$UOV <- FALSE
+map.df[map.df$zone=="U.OV","UOV"] <- TRUE
+
+res[2] <- "Original vegetation (U.OV)/other"
+for(v in vars) {
+  t <- wilcox.test(map.df[[v]] ~ map.df[["UOV"]])
+  res[1] <- v
+  res[3:4] <- c(t$statistic,t$p.value)
+  tests[[length(tests)+1]] <- res
+}
+
+map.df$DBP <- FALSE
+map.df[map.df$zone=="D.BP","DBP"] <- TRUE
+
+res[2] <- "Bare peat (D.BP)/other"
+for(v in vars) {
+  t <- wilcox.test(map.df[[v]] ~ map.df[["DBP"]])
+  res[1] <- v
+  res[3:4] <- c(t$statistic,t$p.value)
+  tests[[length(tests)+1]] <- res
+}
+
+
+map.df$management2 <- "unmanaged_inc_degraded"
+map.df[map.df$management == "Managed","management2"] <- "Managed"
+
+res[2] <- "Managed/Unmanaged including bare peat"
+for(v in vars) {
+  t <- wilcox.test(map.df[[v]] ~ map.df[["management2"]])
+  res[1] <- v
+  res[3:4] <- c(t$statistic,t$p.value)
+  tests[[length(tests)+1]] <- res
+}
+
+stats.df <- do.call("rbind",tests) #combine all vectors into a matrix
+colnames(stats.df) <- stats.df[1,] # set column names
+stats.df <- stats.df[-1,] # delete column names from dataframe
+stats.df[,4] <- format(as.numeric(stats.df[,4]),scientific = FALSE,digits=1) # format the numbers
 
 ```
 
@@ -495,6 +620,12 @@ figfiles[["ord_unconstrained"]] <- list(supplementary = "Figure", plot="pre_rend
 # scree plots (pre-rendered)
 figfiles[["scree"]] <- list(supplementary = "Figure", plot="pre_rendered", file = figfile.scree, legend="Scree plots for constrained and unconstrained ordinations ",width=col2,height=col2/2,res=dpi,display_width=disp2)
 
+# stats table
+figfile <- paste(tables_dir,"/Table[stats].csv",sep="")
+figfiles[["stats"]] <- list(supplementary = "Table", table = stats.df, file = figfile, legend="Mann-Whitney-Wilcoxon test results for various comparisons of chemistry and cultivable microbe data.")
+
+# diversity metrics plots (pre-rendered)
+figfiles[["diversity"]] <- list(supplementary = "Figure", plot="pre_rendered", file = figfile.diversity, legend="Diversity metrics for each zone, per-sample and per-zone",width=col2,height=col2/2,res=dpi,display_width=disp2)
 
 # make figures and tables (export graphics and .csv)
 build_figures(figfiles)
@@ -504,18 +635,15 @@ display_figures(figfiles,1,0,2)
 
 ```
 
-
 ## Calculations for manuscript text
 
 ```{r calcs,echo=FALSE}
 print(calcs_for_manuscript)
-
 ```
 
 ## R package versions
 ```{r packages}
 print(sessionInfo(), locale = FALSE)
-
 ```
 
 ## Citations
