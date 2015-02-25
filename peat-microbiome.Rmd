@@ -268,7 +268,7 @@ cfu[cfu$zone=="U.OV","plot_order"] <- 6
 cfu$zone <- reorder(cfu$zone,cfu$plot_order)
 
 # make the plot
-cfu.plot <-   ggplot(cfu, aes(x=zone, y=cfu_per_g, shape=kingdom, colour=kingdom)) + stat_summary(fun.data = "mean_se", size=1,position=position_dodge(0.45)) +  labs(x = "Zone", y = expression(paste("CFU ", g^-1, sep=""))) + theme(aspect.ratio=1) + scale_y_log10(breaks=c(1000,10000,100000,1000000,10000000)) 
+cfu.plot <-   ggplot(cfu, aes(x=zone, y=cfu_per_g, shape=kingdom, colour=kingdom)) + stat_summary(fun.data = "mean_se", size=1,position=position_dodge(0.45)) +  labs(x = "Zone", y = expression(paste("CFU ", g^-1, " soil", sep=""))) + theme(aspect.ratio=1) + scale_y_log10(breaks=c(1000,10000,100000,1000000,10000000)) 
 
 ```
 
