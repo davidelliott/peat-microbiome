@@ -654,40 +654,120 @@ citation("phyloseq")
 
 ## BES workshop
 ```{r}
-           
-sample_data(expt.bacteria)$metanalyses_study_ID <- 18
-sample_data(expt.bacteria)$sequencing_platform <- 454
-sample_data(expt.bacteria)$marker_region <- "V3"
+# store total P in different column (bacteria)
+sample_data(expt.bacteria)$Ptotal <- sample_data(expt.bacteria)$P
 
-sample_data(expt.fungi)$metanalyses_study_ID <- 19
-sample_data(expt.fungi)$sequencing_platform <- 454
-sample_data(expt.fungi)$marker_region <- "ITS"
+# define the vegetation (bacteria)
+sample_data(expt.bacteria)$current_vegetation <- NA
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="D.BP","current_vegetation"] <- "bare"
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="U.OV","current_vegetation"] <- "mixed"
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="U.Gu","current_vegetation"] <- "mixed"
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="M.25","current_vegetation"] <- "heather"
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="M.YH","current_vegetation"] <- "heather"
+sample_data(expt.bacteria)[sample_data(expt.bacteria)$zone=="M.RG","current_vegetation"] <- "grass"
 
-sample_data(expt.bacteria)$Kingdom <- sample_data(expt.bacteria)$group
-sample_data(expt.bacteria)$lat <- sample_data(expt.bacteria)$Y
-sample_data(expt.bacteria)$lon <- sample_data(expt.bacteria)$X
-sample_data(expt.bacteria)$primer1 <- "341F"
-sample_data(expt.bacteria)$primer2 <- "907R"
+# fill in all the requested columns (bacteria)
+sample_data(expt.bacteria)$Study_refno <- 18
+sample_data(expt.bacteria)$Sample_Name <- sample_names(expt.bacteria)
+sample_data(expt.bacteria)$collection_date <- "06/07/2010"
+sample_data(expt.bacteria)$owner <- "David Elliott"
+sample_data(expt.bacteria)$country <- "UK"
+sample_data(expt.bacteria)$location <- "Holme Moss"
+sample_data(expt.bacteria)$latitude <- sample_data(expt.bacteria)$Y
+sample_data(expt.bacteria)$longitude <- sample_data(expt.bacteria)$X
+sample_data(expt.bacteria)$altitude.elevation.meter. <- sample_data(expt.bacteria)$altitude
+sample_data(expt.bacteria)$moisture <- sample_data(expt.bacteria)$Moisture 
+sample_data(expt.bacteria)$depth.cm. <- "0-15"
+# sample_data(expt.bacteria)$pH
+sample_data(expt.bacteria)$pH_method <- "H2O"
+sample_data(expt.bacteria)$N <- NA
+sample_data(expt.bacteria)$C <- NA
+sample_data(expt.bacteria)$P <- NA
+sample_data(expt.bacteria)$Natural_or_Managed <- sample_data(expt.bacteria)$management
+# sample_data(expt.bacteria)$current_vegetation <- sample_data(expt.bacteria)$zone
+sample_data(expt.bacteria)$biome.latitude. <- "temperate"
+sample_data(expt.bacteria)$biome.humidity. <- NA
+sample_data(expt.bacteria)$habitat <- "peatland"
+sample_data(expt.bacteria)$Experiment <- "no"
+sample_data(expt.bacteria)$Exp_treatment <- NA
+sample_data(expt.bacteria)$Exp_description <- NA
+sample_data(expt.bacteria)$sequencing_platform <- "454"
+sample_data(expt.bacteria)$primers <- "341F/907R"
+sample_data(expt.bacteria)$seq_region <- "V3"
+sample_data(expt.bacteria)$gene <- "16S"
+sample_data(expt.bacteria)$processing_method <- "UPARSE"
+sample_data(expt.bacteria)$taxonomy_database <- "greengenes"
+sample_data(expt.bacteria)$description <- "soil"
 
-sample_data(expt.fungi)$Kingdom <- sample_data(expt.bacteria)$group
-sample_data(expt.fungi)$lat <- sample_data(expt.bacteria)$Y
-sample_data(expt.fungi)$lon <- sample_data(expt.bacteria)$X
-sample_data(expt.fungi)$primer1 <- "ITS1F"
-c$primer2 <- "ITS3R"
+# store total P in different column (fungi)
+sample_data(expt.fungi)$Ptotal <- sample_data(expt.fungi)$P
+
+# define the vegetation (fungi)
+sample_data(expt.fungi)$current_vegetation <- NA
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="D.BP","current_vegetation"] <- "bare"
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="U.OV","current_vegetation"] <- "mixed"
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="U.Gu","current_vegetation"] <- "mixed"
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="M.25","current_vegetation"] <- "heather"
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="M.YH","current_vegetation"] <- "heather"
+sample_data(expt.fungi)[sample_data(expt.fungi)$zone=="M.RG","current_vegetation"] <- "grass"
+
+# fill in all the requested columns (fungi)
+sample_data(expt.fungi)$Study_refno <- 18
+sample_data(expt.fungi)$Sample_Name <- sample_names(expt.fungi)
+sample_data(expt.fungi)$collection_date <- "06/07/2010"
+sample_data(expt.fungi)$owner <- "David Elliott"
+sample_data(expt.fungi)$country <- "UK"
+sample_data(expt.fungi)$location <- "Holme Moss"
+sample_data(expt.fungi)$latitude <- sample_data(expt.fungi)$Y
+sample_data(expt.fungi)$longitude <- sample_data(expt.fungi)$X
+sample_data(expt.fungi)$altitude.elevation.meter. <- sample_data(expt.fungi)$altitude
+sample_data(expt.fungi)$moisture <- sample_data(expt.fungi)$Moisture 
+sample_data(expt.fungi)$depth.cm. <- "0-15"
+# sample_data(expt.fungi)$pH
+sample_data(expt.fungi)$pH_method <- "H2O"
+sample_data(expt.fungi)$N <- NA
+sample_data(expt.fungi)$C <- NA
+sample_data(expt.fungi)$P <- NA
+sample_data(expt.fungi)$Natural_or_Managed <- sample_data(expt.fungi)$management
+sample_data(expt.fungi)$current_vegetation <- sample_data(expt.fungi)$zone
+sample_data(expt.fungi)$biome.latitude. <- "temperate"
+sample_data(expt.fungi)$biome.humidity. <- NA
+sample_data(expt.fungi)$habitat <- "peatland"
+sample_data(expt.fungi)$Experiment <- "no"
+sample_data(expt.fungi)$Exp_treatment <- NA
+sample_data(expt.fungi)$Exp_description <- NA
+sample_data(expt.fungi)$sequencing_platform <- "454"
+sample_data(expt.fungi)$primers <- "ITS1F/ITS3R"
+sample_data(expt.fungi)$seq_region <- "ITS1"
+sample_data(expt.fungi)$gene <- "ITS"
+sample_data(expt.fungi)$processing_method <- "UPARSE"
+sample_data(expt.fungi)$taxonomy_database <- "UNITE"
+sample_data(expt.fungi)$description <- "soil"
 
 
-unwanted_cols <- c("group","Transect","terrain","log_cfu_per_g", "X", "Y", "position" )
-index <- !names(sample_data(expt.fungi))%in%unwanted_cols
-wanted_cols <- names(sample_data(expt.fungi))[index]
+# List the asked-for columns
+wanted_cols <- c("Study_refno","Sample_Name","collection_date","owner","country","location","latitude","longitude","altitude.elevation.meter.","moisture","depth.cm.","pH","pH_method","N","C","P","Natural_or_Managed","current_vegetation","biome.latitude.","biome.humidity.","habitat","Experiment","Exp_treatment","Exp_description","sequencing_platform","primers","seq_region","gene","processing_method","taxonomy_database","description")
+# list the extra columns
+index <- !names(sample_data(expt.bacteria))%in%wanted_cols
+other_cols <- names(sample_data(expt.bacteria))[index]
+# join them together
+cols <- c(wanted_cols,other_cols)
 
-write.csv(otu_table(expt.bacteria),"output/tables/18_otu.csv")
-write.csv(otu_table(expt.fungi),"output/tables/19_otu.csv")
+# Save OTU tables
+write.csv(otu_table(expt.bacteria),"output/tables/18_otu_count.csv")
+write.csv(otu_table(expt.fungi),"output/tables/19_otu_count.csv")
 
-write.csv(sample_data(expt.bacteria)[,wanted_cols],"output/tables/18_env.csv")
-write.csv(sample_data(expt.fungi)[,wanted_cols],"output/tables/19_env.csv")
+# Save OTU tables (relative abundance)
+write.csv(otu_table(expt.bacteria.rel)/100,"output/tables/18_otu.csv")
+write.csv(otu_table(expt.fungi.rel)/100,"output/tables/19_otu.csv")
 
-write.csv(tax_table(expt.bacteria),"output/tables/18_tax_alt.csv")
-write.csv(tax_table(expt.fungi),"output/tables/19_tax_alt.csv")
+# Save environmental data
+write.csv(sample_data(expt.bacteria)[,cols],"output/tables/18_env.csv")
+write.csv(sample_data(expt.fungi)[,cols],"output/tables/19_env.csv")
+
+# Save taxonomy tables
+write.csv(tax_table(expt.bacteria),"output/tables/18_tax.csv")
+write.csv(tax_table(expt.fungi),"output/tables/19_tax.csv")
 
 ```
 
