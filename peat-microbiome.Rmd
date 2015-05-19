@@ -651,3 +651,43 @@ print(sessionInfo(), locale = FALSE)
 citation("vegan")
 citation("phyloseq")
 ```
+
+## BES workshop
+```{r}
+           
+sample_data(expt.bacteria)$metanalyses_study_ID <- 18
+sample_data(expt.bacteria)$sequencing_platform <- 454
+sample_data(expt.bacteria)$marker_region <- "V3"
+
+sample_data(expt.fungi)$metanalyses_study_ID <- 19
+sample_data(expt.fungi)$sequencing_platform <- 454
+sample_data(expt.fungi)$marker_region <- "ITS"
+
+sample_data(expt.bacteria)$Kingdom <- sample_data(expt.bacteria)$group
+sample_data(expt.bacteria)$lat <- sample_data(expt.bacteria)$Y
+sample_data(expt.bacteria)$lon <- sample_data(expt.bacteria)$X
+sample_data(expt.bacteria)$primer1 <- "341F"
+sample_data(expt.bacteria)$primer2 <- "907R"
+
+sample_data(expt.fungi)$Kingdom <- sample_data(expt.bacteria)$group
+sample_data(expt.fungi)$lat <- sample_data(expt.bacteria)$Y
+sample_data(expt.fungi)$lon <- sample_data(expt.bacteria)$X
+sample_data(expt.fungi)$primer1 <- "ITS1F"
+c$primer2 <- "ITS3R"
+
+
+unwanted_cols <- c("group","Transect","terrain","log_cfu_per_g", "X", "Y", "position" )
+index <- !names(sample_data(expt.fungi))%in%unwanted_cols
+wanted_cols <- names(sample_data(expt.fungi))[index]
+
+write.csv(otu_table(expt.bacteria),"output/tables/18_otu.csv")
+write.csv(otu_table(expt.fungi),"output/tables/19_otu.csv")
+
+write.csv(sample_data(expt.bacteria)[,wanted_cols],"output/tables/18_env.csv")
+write.csv(sample_data(expt.fungi)[,wanted_cols],"output/tables/19_env.csv")
+
+write.csv(tax_table(expt.bacteria),"output/tables/18_tax_alt.csv")
+write.csv(tax_table(expt.fungi),"output/tables/19_tax_alt.csv")
+
+```
+
